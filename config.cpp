@@ -1,5 +1,5 @@
 /*
- * config.cpp  -  ESP32-RC-Sound v0.70
+ * config.cpp  -  ESP32-RC-Sound v0.84
  */
 
 #include "config.h"
@@ -31,6 +31,8 @@ void Reset_all() {
     config.Einkanal_mode          = 0;
     config.Einkanal_RC_System     = 0;
     config.modul_adress           = 0;
+    config.sport_poll_id[0]       = 0xA1;   // Physical ID 0x02 (Werkseinstellung Sensor 1)
+    config.sport_poll_id[1]       = 0x22;   // Physical ID 0x03 (Sensor 2 umprogrammiert)
     config.Source_Ebenen_Um_Kanal = 999;
     config.Source_Ebenen_Kanal    = 999;
     config.Hardware_Config        = 0;
@@ -82,6 +84,8 @@ void loadConfig() {
     config.Einkanal_mode          = p.getInt("ekmo", 0);
     config.Einkanal_RC_System     = p.getInt("ekrc", 0);
     config.modul_adress           = p.getInt("madr", 0);
+    config.sport_poll_id[0]       = (uint8_t)p.getInt("spid0", 0xA1);
+    config.sport_poll_id[1]       = (uint8_t)p.getInt("spid1", 0x22);
     config.Source_Ebenen_Um_Kanal = p.getInt("ebum", 999);
     config.Source_Ebenen_Kanal    = p.getInt("ebk",  999);
     config.Hardware_Config        = p.getInt("hwcfg",0);
@@ -126,6 +130,8 @@ void saveConfigForce() {
     p.putInt("ekmo", config.Einkanal_mode);
     p.putInt("ekrc", config.Einkanal_RC_System);
     p.putInt("madr", config.modul_adress);
+    p.putInt("spid0",(int)config.sport_poll_id[0]);
+    p.putInt("spid1",(int)config.sport_poll_id[1]);
     p.putInt("ebum", config.Source_Ebenen_Um_Kanal);
     p.putInt("ebk",  config.Source_Ebenen_Kanal);
     p.putInt("hwcfg",config.Hardware_Config);

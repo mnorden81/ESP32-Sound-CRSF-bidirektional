@@ -2,7 +2,7 @@
 #define CONFIG_H
 
 /*
- * config.h  -  ESP32-RC-Sound v0.70
+ * config.h  -  ESP32-RC-Sound v0.84
  *
  * Hardware_Config:
  *   0 = V1  GPIO-Pins {22, 0, 2, 4}  – BUS + PWM + Pin + Einkanal
@@ -30,6 +30,8 @@ struct ConfigData {
     int Einkanal_mode;           // 0=Normal, 10-13=WM-Adresse 0-3
     int Einkanal_RC_System;      // 0=FrSky,1=FlySky,2=ELRS SBUS,3=Hott,4=ELRS CRSF
     int modul_adress;            // Modul-Adresse (WM/CRSF)
+
+    uint8_t sport_poll_id[2];    // S.Port Physical Poll-ID Sensor 1+2 (z.B. 0xA1, 0x22)
 
     int Source_Ebenen_Um_Kanal;  // Ebenen Umschalt-Kanal (999=deaktiviert)
     int Source_Ebenen_Kanal;     // Ebenen Werte-Kanal    (999=deaktiviert)
