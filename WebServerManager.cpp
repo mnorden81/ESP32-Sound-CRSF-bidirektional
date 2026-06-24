@@ -2,7 +2,6 @@
 #include "config.h"
 #include <Arduino.h>
 #include "XT_I2S_Audio.h"
-#include "sport_lipo.h"
 
 WebServer  WebServerManager::server(80);
 int        WebServerManager::Menu        = 0;
@@ -46,34 +45,12 @@ void WebServerManager::begin(const char* apSsid, const char* apPassword) {
   // Alle Requests auf einen Handler
   server.onNotFound([]() { WebServerManager::handleRequest(); });
   server.on("/", []()    { WebServerManager::handleRequest(); });
-  server.on("/sport", []() { WebServerManager::handleSport(); });
   server.begin();
 }
 
 // ── handleClient(): non-blocking, kehrt sofort zurueck ──────────────────
 void WebServerManager::Webpage() {
   server.handleClient();
-}
-
-// ── /sport JSON-Endpunkt (LiPo Live-Daten) ──────────────────────────────
-void WebServerManager::handleSport() {
-  char json[512]; int pos = 0;
-  pos += snprintf(json+pos, sizeof(json)-pos, "{");
-  for (uint8_t i = 0; i < 2; i++) {
-    pos += snprintf(json+pos, sizeof(json)-pos,
-      "\"s%u\":{\"online\":%s,\"cells\":%u,\"total\":%.2f,\"min\":%.3f,\"soc\":%u,\"cv\":[",
-      i, lipoSensor[i].online ? "true" : "false",
-      lipoSensor[i].cellCount, lipoSensor[i].totalVoltage,
-      lipoSensor[i].minCell, sportCalcSoC(lipoSensor[i].minCell));
-    for (uint8_t c = 0; c < 6; c++)
-      pos += snprintf(json+pos, sizeof(json)-pos, "%.3f%s",
-        lipoSensor[i].cellVoltage[c], c < 5 ? "," : "");
-    pos += snprintf(json+pos, sizeof(json)-pos, "]}%s", i < 1 ? "," : "");
-  }
-  pos += snprintf(json+pos, sizeof(json)-pos,
-    ",\"pid0\":\"%02X\",\"pid1\":\"%02X\"}",
-    config.sport_poll_id[0], config.sport_poll_id[1]);
-  server.send(200, "application/json", json);
 }
 
 // ── Haupt-Request-Handler ────────────────────────────────────────────────
@@ -83,9 +60,8 @@ void WebServerManager::handleRequest() {
   const String uri = server.uri();
 
   // ── Navigation ────────────────────────────────────────────────────────
-  if (uri == "/next" || server.hasArg("next"))      { Menu++; }
-  if (uri == "/back" || server.hasArg("back"))      { Menu--; }
-  if (server.hasArg("menu"))  { Menu = server.arg("menu").toInt(); }
+  if (uri == "/next")      { Menu++; }
+  if (uri == "/back")      { Menu--; }
   if (uri == "/Sound/on")  { Sound_on_web[Menu] = true; }
   if (uri == "/save")      { markDirty(); saveConfigForce(); }
   if (uri == "/reset")     { Reset_all(); }
@@ -112,8 +88,6 @@ void WebServerManager::handleRequest() {
   if (server.hasArg("RCSytem"))              { config.Einkanal_RC_System           = server.arg("RCSytem").toInt();               markDirty(); }
   if (server.hasArg("SbuschannelEinkanal"))  { config.Einkanal_Channel             = server.arg("SbuschannelEinkanal").toInt();   markDirty(); }
   if (server.hasArg("MODULADRESSE"))         { config.modul_adress                 = server.arg("MODULADRESSE").toInt();          markDirty(); }
-  if (server.hasArg("SportPollID0"))         { config.sport_poll_id[0]             = (uint8_t)strtol(server.arg("SportPollID0").c_str(), nullptr, 16); markDirty(); }
-  if (server.hasArg("SportPollID1"))         { config.sport_poll_id[1]             = (uint8_t)strtol(server.arg("SportPollID1").c_str(), nullptr, 16); markDirty(); }
   if (server.hasArg("EinkanalMode"))         { config.Einkanal_mode                = server.arg("EinkanalMode").toInt();          markDirty(); }
   if (server.hasArg("EbenenUmschaltungKanal")){ config.Source_Ebenen_Um_Kanal     = server.arg("EbenenUmschaltungKanal").toInt();markDirty(); }
   if (server.hasArg("EbenenKanal"))          { config.Source_Ebenen_Kanal          = server.arg("EbenenKanal").toInt();           markDirty(); }
@@ -144,7 +118,7 @@ void WebServerManager::handleRequest() {
     config.Device_Name[sizeof(config.Device_Name)-1] = '\0'; markDirty();
   }
 
-  Menu = constrain(Menu, 0, 12);
+  Menu = constrain(Menu, 0, 11);
 
   // ── HTML senden ───────────────────────────────────────────────────────
   server.send(200, "text/html", buildPage());
@@ -264,50 +238,117 @@ String WebServerManager::buildPage() {
 
   page += "<p class=\"text2\" >Quelle Einschalten Motor</p>\n";
 
-  // Quelle Einschalten Motor – V3/V4: nur BUS + Einkanal
+  // Quelle Einschalten Motor
   page += "<p><select id=\"SoundON\" class=\"buttonA\" onchange=\"setsoundon()\">\n";
   page += "<optgroup label=\"BUS Kanal Low\">\n";
-  for (int i=0;i<16;i++){char b[64];snprintf(b,sizeof(b),"<option value=\"%d\">BUS Kanal Low %02d</option>\n",i,i+1);page+=b;}
+  page += "<option value=\"0\">BUS Kanal Low 01</option>\n";
+  page += "<option value=\"1\">BUS Kanal Low 02</option>\n";
+  page += "<option value=\"2\">BUS Kanal Low 03</option>\n";
+  page += "<option value=\"3\">BUS Kanal Low 04</option>\n";
+  page += "<option value=\"4\">BUS Kanal Low 05</option>\n";
+  page += "<option value=\"5\">BUS Kanal Low 06</option>\n";
+  page += "<option value=\"6\">BUS Kanal Low 07</option>\n";
+  page += "<option value=\"7\">BUS Kanal Low 08</option>\n";
+  page += "<option value=\"8\">BUS Kanal Low 09</option>\n";
+  page += "<option value=\"9\">BUS Kanal Low 10</option>\n";
+  page += "<option value=\"10\">BUS Kanal Low 11</option>\n";
+  page += "<option value=\"11\">BUS Kanal Low 12</option>\n";
+  page += "<option value=\"12\">BUS Kanal Low 13</option>\n";
+  page += "<option value=\"13\">BUS Kanal Low 14</option>\n";
+  page += "<option value=\"14\">BUS Kanal Low 15</option>\n";
+  page += "<option value=\"15\">BUS Kanal Low 16</option>\n";
   page += "</optgroup>\n";
   page += "<optgroup label=\"BUS Kanal High\">\n";
-  for (int i=0;i<16;i++){char b[64];snprintf(b,sizeof(b),"<option value=\"%d\">BUS Kanal High %02d</option>\n",20+i,i+1);page+=b;}
+      	    page += "<option value=\"20\">BUS Kanal High 01</option>"; page += "\n";
+  page += "<option value=\"21\">BUS Kanal High 02</option>"; page += "\n";
+  page += "<option value=\"22\">BUS Kanal High 03</option>"; page += "\n";
+  page += "<option value=\"23\">BUS Kanal High 04</option>"; page += "\n";
+  page += "<option value=\"24\">BUS Kanal High 05</option>"; page += "\n";
+  page += "<option value=\"25\">BUS Kanal High 06</option>"; page += "\n";
+  page += "<option value=\"26\">BUS Kanal High 07</option>"; page += "\n";
+  page += "<option value=\"27\">BUS Kanal High 08</option>"; page += "\n";
+  page += "<option value=\"28\">BUS Kanal High 09</option>"; page += "\n";
+  page += "<option value=\"29\">BUS Kanal High 10</option>"; page += "\n";
+  page += "<option value=\"30\">BUS Kanal High 11</option>"; page += "\n";
+  page += "<option value=\"31\">BUS Kanal High 12</option>"; page += "\n";
+  page += "<option value=\"32\">BUS Kanal High 13</option>"; page += "\n";
+  page += "<option value=\"33\">BUS Kanal High 14</option>"; page += "\n";
+  page += "<option value=\"34\">BUS Kanal High 15</option>"; page += "\n";
+  page += "<option value=\"35\">BUS Kanal High 16</option>"; page += "\n";
   page += "</optgroup>\n";
-  if (config.Hardware_Config < 2) {
   page += "<optgroup label=\"PWM Pin Low\">\n";
-  for (int i=0;i<6;i++){char b[64];snprintf(b,sizeof(b),"<option value=\"%d\">PWM Pin Low %02d</option>\n",40+i,i+1);page+=b;}
+  page += "<option value=\"40\">PWM Pin Low 01</option>"; page += "\n";
+  page += "<option value=\"41\">PWM Pin Low 02</option>"; page += "\n";
+  page += "<option value=\"42\">PWM Pin Low 03</option>"; page += "\n";
+  page += "<option value=\"43\">PWM Pin Low 04</option>"; page += "\n";
+  page += "<option value=\"44\">PWM Pin Low 05</option>"; page += "\n";
+  page += "<option value=\"45\">PWM Pin Low 06</option>"; page += "\n";
   page += "</optgroup>\n";
   page += "<optgroup label=\"PWM Pin High\">\n";
-  for (int i=0;i<6;i++){char b[64];snprintf(b,sizeof(b),"<option value=\"%d\">PWM Pin High %02d</option>\n",50+i,i+1);page+=b;}
+  page += "<option value=\"50\">PWM Pin High 01</option>"; page += "\n";
+  page += "<option value=\"51\">PWM Pin High 02</option>"; page += "\n";
+  page += "<option value=\"52\">PWM Pin High 03</option>"; page += "\n";
+  page += "<option value=\"53\">PWM Pin High 04</option>"; page += "\n";
+  page += "<option value=\"54\">PWM Pin High 05</option>"; page += "\n";
+  page += "<option value=\"55\">PWM Pin High 06</option>"; page += "\n";
   page += "</optgroup>\n";
   page += "<optgroup label=\"Eingang Pin\">\n";
-  for (int i=0;i<6;i++){char b[64];snprintf(b,sizeof(b),"<option value=\"%d\">Eingang Pin %02d</option>\n",60+i,i+1);page+=b;}
+  page += "<option value=\"60\">Eingang Pin 01</option>"; page += "\n";
+  page += "<option value=\"61\">Eingang Pin 02</option>"; page += "\n";
+  page += "<option value=\"62\">Eingang Pin 03</option>"; page += "\n";
+  page += "<option value=\"63\">Eingang Pin 04</option>"; page += "\n";
+  page += "<option value=\"64\">Eingang Pin 05</option>"; page += "\n";
+  page += "<option value=\"65\">Eingang Pin 06</option>"; page += "\n";
   page += "</optgroup>\n";
-  } // end V1/V2 only
   page += "<optgroup label=\"Einkanal\">\n";
-  for (int i=0;i<8;i++){char b[64];snprintf(b,sizeof(b),"<option value=\"%d\">Einkanal %02d</option>\n",70+i,i+1);page+=b;}
-  page += "</optgroup>\n";
+  page += "<option value=\"70\">Einkanal 01</option>"; page += "\n";
+  page += "<option value=\"71\">Einkanal 02</option>"; page += "\n";
+  page += "<option value=\"72\">Einkanal 03</option>"; page += "\n";
+  page += "<option value=\"73\">Einkanal 04</option>"; page += "\n";
+  page += "<option value=\"74\">Einkanal 05</option>"; page += "\n";
+  page += "<option value=\"75\">Einkanal 06</option>"; page += "\n";
+  page += "<option value=\"76\">Einkanal 07</option>"; page += "\n";
+  page += "<option value=\"77\">Einkanal 08</option>"; page += "\n";
+  page += "</optgroup>"; page += "\n";
   page += "<optgroup label=\"Optionen\">\n";
-  page += "<option value=\"200\">Dauerbetrieb an</option>\n";
-  page += "<option value=\"999\">Deaktiviert</option>\n";
-  page += "</optgroup>\n";
+  page += "<option value=\"200\">Dauerbetrieb an</option>"; page += "\n";
+  page += "<option value=\"999\">Deaktiviert</option>"; page += "\n";
+  page += "</optgroup>"; page += "\n";
   page += "</select><br></p>\n";
 
 
   page += "<p class=\"text2\" >Quelle Motorspeed Motor</p>\n";
 
-  // Quelle Motorspeed Motor – V3/V4: nur BUS
+  // Quelle Motorspeed Motor
   page += "<p><select id=\"SoundSPEED\" class=\"buttonA\" onchange=\"setsoundspeed()\">\n";
   page += "<optgroup label=\"BUS Kanal\">\n";
-  for (int i=0;i<16;i++){char b[64];snprintf(b,sizeof(b),"<option value=\"%d\">BUS Kanal %02d</option>\n",i,i+1);page+=b;}
-  page += "</optgroup>\n";
-  if (config.Hardware_Config < 2) {
+  page += "<option value=\"0\">BUS Kanal 01</option>\n";
+  page += "<option value=\"1\">BUS Kanal 02</option>\n";
+  page += "<option value=\"2\">BUS Kanal 03</option>\n";
+  page += "<option value=\"3\">BUS Kanal 04</option>\n";
+  page += "<option value=\"4\">BUS Kanal 05</option>\n";
+  page += "<option value=\"5\">BUS Kanal 06</option>\n";
+  page += "<option value=\"6\">BUS Kanal 07</option>\n";
+  page += "<option value=\"7\">BUS Kanal 08</option>\n";
+  page += "<option value=\"8\">BUS Kanal 09</option>\n";
+  page += "<option value=\"9\">BUS Kanal 10</option>\n";
+  page += "<option value=\"10\">BUS Kanal 11</option>\n";
+  page += "<option value=\"11\">BUS Kanal 12</option>\n";
+  page += "<option value=\"12\">BUS Kanal 13</option>\n";
+  page += "<option value=\"13\">BUS Kanal 14</option>\n";
+  page += "<option value=\"14\">BUS Kanal 15</option>\n";
+  page += "<option value=\"15\">BUS Kanal 16</option>\n";
   page += "<optgroup label=\"PWM Pin\">\n";
-  for (int i=0;i<6;i++){char b[64];snprintf(b,sizeof(b),"<option value=\"%d\">PWM Pin %02d</option>\n",20+i,i+1);page+=b;}
+  page += "<option value=\"20\">PWM Pin 01</option>"; page += "\n";
+  page += "<option value=\"21\">PWM Pin 02</option>"; page += "\n";
+  page += "<option value=\"22\">PWM Pin 03</option>"; page += "\n";
+  page += "<option value=\"23\">PWM Pin 04</option>"; page += "\n";
+  page += "<option value=\"24\">PWM Pin 05</option>"; page += "\n";
+  page += "<option value=\"25\">PWM Pin 06</option>"; page += "\n";
   page += "</optgroup>\n";
-  } // end V1/V2 only
-  page += "<optgroup label=\"Optionen\">\n";
-  page += "<option value=\"999\">Deaktiviert</option>\n";
-  page += "</optgroup>\n";
+  page += "<optgroup label=\"Optionen\">"; page += "\n";
+  page += "<option value=\"999\">Deaktiviert</option>"; page += "\n";
+  page += "</optgroup>"; page += "\n";
   page += "</select><br></p>\n";
 
   page += "<script> function setsoundspeed() { \n";
@@ -394,35 +435,109 @@ String WebServerManager::buildPage() {
 
   page += "<p class=\"text2\" >Quelle Einschalten Sound</p>\n";
 
-  // Quelle Einschalten Sound – V3/V4: nur BUS + Einkanal + Ebenen
+
+  // Quelle Einschalten Sound
   page += "<p><select id=\"SoundON\" class=\"buttonA\" onchange=\"setsoundon()\">\n";
   page += "<optgroup label=\"BUS Kanal Low\">\n";
-  for (int i=0;i<16;i++){char b[64];snprintf(b,sizeof(b),"<option value=\"%d\">BUS Kanal Low %02d</option>\n",i,i+1);page+=b;}
+  page += "<option value=\"0\">BUS Kanal Low 01</option>\n";
+  page += "<option value=\"1\">BUS Kanal Low 02</option>\n";
+  page += "<option value=\"2\">BUS Kanal Low 03</option>\n";
+  page += "<option value=\"3\">BUS Kanal Low 04</option>\n";
+  page += "<option value=\"4\">BUS Kanal Low 05</option>\n";
+  page += "<option value=\"5\">BUS Kanal Low 06</option>\n";
+  page += "<option value=\"6\">BUS Kanal Low 07</option>\n";
+  page += "<option value=\"7\">BUS Kanal Low 08</option>\n";
+  page += "<option value=\"8\">BUS Kanal Low 09</option>\n";
+  page += "<option value=\"9\">BUS Kanal Low 10</option>\n";
+  page += "<option value=\"10\">BUS Kanal Low 11</option>\n";
+  page += "<option value=\"11\">BUS Kanal Low 12</option>\n";
+  page += "<option value=\"12\">BUS Kanal Low 13</option>\n";
+  page += "<option value=\"13\">BUS Kanal Low 14</option>\n";
+  page += "<option value=\"14\">BUS Kanal Low 15</option>\n";
+  page += "<option value=\"15\">BUS Kanal Low 16</option>\n";
   page += "</optgroup>\n";
   page += "<optgroup label=\"BUS Kanal High\">\n";
-  for (int i=0;i<16;i++){char b[64];snprintf(b,sizeof(b),"<option value=\"%d\">BUS Kanal High %02d</option>\n",20+i,i+1);page+=b;}
+      	    page += "<option value=\"20\">BUS Kanal High 01</option>"; page += "\n";
+  page += "<option value=\"21\">BUS Kanal High 02</option>"; page += "\n";
+  page += "<option value=\"22\">BUS Kanal High 03</option>"; page += "\n";
+  page += "<option value=\"23\">BUS Kanal High 04</option>"; page += "\n";
+  page += "<option value=\"24\">BUS Kanal High 05</option>"; page += "\n";
+  page += "<option value=\"25\">BUS Kanal High 06</option>"; page += "\n";
+  page += "<option value=\"26\">BUS Kanal High 07</option>"; page += "\n";
+  page += "<option value=\"27\">BUS Kanal High 08</option>"; page += "\n";
+  page += "<option value=\"28\">BUS Kanal High 09</option>"; page += "\n";
+  page += "<option value=\"29\">BUS Kanal High 10</option>"; page += "\n";
+  page += "<option value=\"30\">BUS Kanal High 11</option>"; page += "\n";
+  page += "<option value=\"31\">BUS Kanal High 12</option>"; page += "\n";
+  page += "<option value=\"32\">BUS Kanal High 13</option>"; page += "\n";
+  page += "<option value=\"33\">BUS Kanal High 14</option>"; page += "\n";
+  page += "<option value=\"34\">BUS Kanal High 15</option>"; page += "\n";
+  page += "<option value=\"35\">BUS Kanal High 16</option>"; page += "\n";
   page += "</optgroup>\n";
-  if (config.Hardware_Config < 2) {
   page += "<optgroup label=\"PWM Pin Low\">\n";
-  for (int i=0;i<6;i++){char b[64];snprintf(b,sizeof(b),"<option value=\"%d\">PWM Pin Low %02d</option>\n",40+i,i+1);page+=b;}
+  page += "<option value=\"40\">PWM Pin Low 01</option>"; page += "\n";
+  page += "<option value=\"41\">PWM Pin Low 02</option>"; page += "\n";
+  page += "<option value=\"42\">PWM Pin Low 03</option>"; page += "\n";
+  page += "<option value=\"43\">PWM Pin Low 04</option>"; page += "\n";
+  page += "<option value=\"44\">PWM Pin Low 05</option>"; page += "\n";
+  page += "<option value=\"45\">PWM Pin Low 06</option>"; page += "\n";
   page += "</optgroup>\n";
   page += "<optgroup label=\"PWM Pin High\">\n";
-  for (int i=0;i<6;i++){char b[64];snprintf(b,sizeof(b),"<option value=\"%d\">PWM Pin High %02d</option>\n",50+i,i+1);page+=b;}
+  page += "<option value=\"50\">PWM Pin High 01</option>"; page += "\n";
+  page += "<option value=\"51\">PWM Pin High 02</option>"; page += "\n";
+  page += "<option value=\"52\">PWM Pin High 03</option>"; page += "\n";
+  page += "<option value=\"53\">PWM Pin High 04</option>"; page += "\n";
+  page += "<option value=\"54\">PWM Pin High 05</option>"; page += "\n";
+  page += "<option value=\"55\">PWM Pin High 06</option>"; page += "\n";
   page += "</optgroup>\n";
   page += "<optgroup label=\"Eingang Pin\">\n";
-  for (int i=0;i<6;i++){char b[64];snprintf(b,sizeof(b),"<option value=\"%d\">Eingang Pin %02d</option>\n",60+i,i+1);page+=b;}
+  page += "<option value=\"60\">Eingang Pin 01</option>"; page += "\n";
+  page += "<option value=\"61\">Eingang Pin 02</option>"; page += "\n";
+  page += "<option value=\"62\">Eingang Pin 03</option>"; page += "\n";
+  page += "<option value=\"63\">Eingang Pin 04</option>"; page += "\n";
+  page += "<option value=\"64\">Eingang Pin 05</option>"; page += "\n";
+  page += "<option value=\"65\">Eingang Pin 06</option>"; page += "\n";
   page += "</optgroup>\n";
-  } // end V1/V2 only
   page += "<optgroup label=\"Einkanal\">\n";
-  for (int i=0;i<8;i++){char b[64];snprintf(b,sizeof(b),"<option value=\"%d\">Einkanal %02d</option>\n",70+i,i+1);page+=b;}
-  page += "</optgroup>\n";
+  page += "<option value=\"70\">Einkanal 01</option>"; page += "\n";
+  page += "<option value=\"71\">Einkanal 02</option>"; page += "\n";
+  page += "<option value=\"72\">Einkanal 03</option>"; page += "\n";
+  page += "<option value=\"73\">Einkanal 04</option>"; page += "\n";
+  page += "<option value=\"74\">Einkanal 05</option>"; page += "\n";
+  page += "<option value=\"75\">Einkanal 06</option>"; page += "\n";
+  page += "<option value=\"76\">Einkanal 07</option>"; page += "\n";
+  page += "<option value=\"77\">Einkanal 08</option>"; page += "\n";
+  page += "</optgroup>"; page += "\n";
   page += "<optgroup label=\"Ebenen Umschaltung\">\n";
-  for (int e=1;e<=3;e++) for (int k=1;k<=8;k++){char b[80];snprintf(b,sizeof(b),"<option value=\"%d\">Ebene %02d Kanal %02d</option>\n",80+(e-1)*8+(k-1),e,k);page+=b;}
-  page += "</optgroup>\n";
+  page += "<option value=\"80\">Ebene 01 Kanal 01</option>"; page += "\n";
+  page += "<option value=\"81\">Ebene 01 Kanal 02</option>"; page += "\n";
+  page += "<option value=\"82\">Ebene 01 Kanal 03</option>"; page += "\n";
+  page += "<option value=\"83\">Ebene 01 Kanal 04</option>"; page += "\n";
+  page += "<option value=\"84\">Ebene 01 Kanal 05</option>"; page += "\n";
+  page += "<option value=\"85\">Ebene 01 Kanal 06</option>"; page += "\n";
+  page += "<option value=\"86\">Ebene 01 Kanal 07</option>"; page += "\n";
+  page += "<option value=\"87\">Ebene 01 Kanal 08</option>"; page += "\n";
+  page += "<option value=\"88\">Ebene 02 Kanal 01</option>"; page += "\n";
+  page += "<option value=\"89\">Ebene 02 Kanal 02</option>"; page += "\n";
+  page += "<option value=\"90\">Ebene 02 Kanal 03</option>"; page += "\n";
+  page += "<option value=\"91\">Ebene 02 Kanal 04</option>"; page += "\n";
+  page += "<option value=\"92\">Ebene 02 Kanal 05</option>"; page += "\n";
+  page += "<option value=\"93\">Ebene 02 Kanal 06</option>"; page += "\n";
+  page += "<option value=\"94\">Ebene 02 Kanal 07</option>"; page += "\n";
+  page += "<option value=\"95\">Ebene 02 Kanal 08</option>\n";
+  page += "<option value=\"96\">Ebene 03 Kanal 01</option>"; page += "\n";
+  page += "<option value=\"97\">Ebene 03 Kanal 02</option>"; page += "\n";
+  page += "<option value=\"98\">Ebene 03 Kanal 03</option>"; page += "\n";
+  page += "<option value=\"99\">Ebene 03 Kanal 04</option>"; page += "\n";
+  page += "<option value=\"100\">Ebene 03 Kanal 05</option>"; page += "\n";
+  page += "<option value=\"101\">Ebene 03 Kanal 06</option>"; page += "\n";
+  page += "<option value=\"102\">Ebene 03 Kanal 07</option>"; page += "\n";
+  page += "<option value=\"103\">Ebene 03 Kanal 08</option>"; page += "\n";
+  page += "</optgroup>"; page += "\n";
   page += "<optgroup label=\"Optionen\">\n";
-  page += "<option value=\"200\">Dauerbetrieb an</option>\n";
-  page += "<option value=\"999\">Deaktiviert</option>\n";
-  page += "</optgroup>\n";
+  page += "<option value=\"200\">Dauerbetrieb an</option>"; page += "\n";
+  page += "<option value=\"999\">Deaktiviert</option>"; page += "\n";
+  page += "</optgroup>"; page += "\n";
   page += "</select><br></p>\n";
 
   
@@ -778,10 +893,9 @@ String WebServerManager::buildPage() {
   page += "<p class=\"text2\" >Hardwareconfig</p>\n";
 
   page += "<p><select id=\"HardwareConfig\" class=\"buttonA\" onchange=\"setHardwareConfig()\">\n";
-  page += "<option value=\"0\">V1 (GPIO 16,17,22,0,2,4)</option>\n";
-  page += "<option value=\"1\">V2 (GPIO 16,17,14,27,32,33)</option>\n";
+  page += "<option value=\"0\">V1 (GPIO 22,0,2,4)</option>\n";
+  page += "<option value=\"1\">V2 (GPIO 14,27,32,33)</option>\n";
   page += "<option value=\"2\">V3 (nur BUS+Einkanal)</option>\n";
-  page += "<option value=\"3\">V4 (BUS+Einkanal+S.Port GPIO32/33)</option>\n";
   page += "</select><br></p>\n";
 
   page += "<script> function setHardwareConfig() { \n";
@@ -792,7 +906,7 @@ String WebServerManager::buildPage() {
   page += "xhr.open('GET', \"/?HardwareConfig=\" + val + \"&\", true);\n";
   page += "xhr.send(); } </script>\n";
 
-  valueString = String(constrain(config.Hardware_Config,0,3), DEC);
+  valueString = String(constrain(config.Hardware_Config,0,2), DEC);
 
   page += "<script> \n";
   page += "var selectedOption =" + valueString + ";\n";
@@ -907,11 +1021,7 @@ String WebServerManager::buildPage() {
   valueString = String(config.Einkanal_mode, DEC);
   page += "<br> Konfig Einkanal Mode: " + valueString; page += "\n";
   valueString = String(config.modul_adress, DEC);
-  page += "<br> Konfig CRSF Modul Adress: " + valueString; page += "\n";
-  valueString = String(config.sport_poll_id[0], HEX);
-  page += "<br> S.Port Poll-ID Sensor 1: 0x" + valueString; page += "\n";
-  valueString = String(config.sport_poll_id[1], HEX);
-  page += "<br> S.Port Poll-ID Sensor 2: 0x" + valueString + "</p> </div>\n";
+  page += "<br> Konfig CRSF Modul Adress: " + valueString + "</p> </div>\n";
   break;
 
   case 11:
@@ -991,116 +1101,8 @@ String WebServerManager::buildPage() {
   page += "<p><a href=\"/save\"><button class=\"button button2\">Save</button></a></p>\n";
   
   break;
-  case 12:
-
-  page += "<p class=\"text2\" ><b>FrSky LiPo Sensoren</b></p>\n";
-
-  page += "<p><a href=\"/back\"><button class=\"button button3\">Back</button></a>\n";
-  page += "<a href=\"/next\"><button class=\"button button4\">Next</button></a></p>\n";
-
-  page += "<br />\n";
-
-  // Poll-ID Konfiguration
-  page += "<p class=\"text2\" ><b>Sensor Adresse (Poll-ID)</b></p>\n";
-  page += "<p class=\"text3\" >Hex-Wert eingeben, z.B. A1 oder 22</p>\n";
-
-  // Sensor 1
-  { char hb[4]; snprintf(hb, sizeof(hb), "%02X", config.sport_poll_id[0]);
-    page += "<p class=\"text2\" >Sensor 1 (Pack 1)</p>\n";
-    page += "<p><input type=\"text\" id=\"SportPollID0\" maxlength=\"2\" ";
-    page += "style=\"width:90px; height:36px; font-size:22px; text-align:center; font-family:monospace; border:3px solid black; border-radius:8px;\" ";
-    page += "value=\"" + String(hb) + "\" onchange=\"setSportPollID0()\"></p>\n";
-    page += "<p class=\"text3\" >Werkseinstellung: A1 &nbsp;(Physical ID 0x02)</p>\n";
   }
-  page += "<script> function setSportPollID0() {\n";
-  page += "var val = document.getElementById(\"SportPollID0\").value;\n";
-  page += "var xhr = new XMLHttpRequest();\n";
-  page += "xhr.open('GET', \"/?SportPollID0=\" + encodeURIComponent(val) + \"&\", true);\n";
-  page += "xhr.send(); } </script>\n";
 
-  // Sensor 2
-  { char hb[4]; snprintf(hb, sizeof(hb), "%02X", config.sport_poll_id[1]);
-    page += "<p class=\"text2\" >Sensor 2 (Pack 2)</p>\n";
-    page += "<p><input type=\"text\" id=\"SportPollID1\" maxlength=\"2\" ";
-    page += "style=\"width:90px; height:36px; font-size:22px; text-align:center; font-family:monospace; border:3px solid black; border-radius:8px;\" ";
-    page += "value=\"" + String(hb) + "\" onchange=\"setSportPollID1()\"></p>\n";
-    page += "<p class=\"text3\" >Werkseinstellung: 22 &nbsp;(Physical ID 0x03)</p>\n";
-  }
-  page += "<script> function setSportPollID1() {\n";
-  page += "var val = document.getElementById(\"SportPollID1\").value;\n";
-  page += "var xhr = new XMLHttpRequest();\n";
-  page += "xhr.open('GET', \"/?SportPollID1=\" + encodeURIComponent(val) + \"&\", true);\n";
-  page += "xhr.send(); } </script>\n";
-
-  page += "<p><a href=\"/save\"><button class=\"button button2\">Save</button></a></p>\n";
-
-  page += "<hr>\n";
-
-  // Live-Anzeige
-  page += "<p class=\"text2\" ><b>Live Sensorwerte</b></p>\n";
-  page += "<p><a href=\"/?menu=12\"><button class=\"button button1\">Aktualisieren</button></a></p>\n";
-
-  // Pack 1
-  page += "<div id=\"pack0\" style=\"border:3px solid black; border-radius:10px; padding:10px; margin:8px 0; text-align:left;\">\n";
-  page += "<p class=\"text2\" style=\"margin:0 0 6px;\"><b>Pack 1</b> &nbsp;<span id=\"st0\" style=\"font-size:13px; padding:2px 8px; border-radius:6px; background:#aaa; color:white;\">offline</span></p>\n";
-  page += "<p class=\"text2\" id=\"tot0\">Gesamt: -- V</p>\n";
-  page += "<p class=\"text2\" id=\"soc0\">SoC: -- %</p>\n";
-  page += "<p class=\"text2\" id=\"min0\">Min-Zelle: -- V</p>\n";
-  page += "<div id=\"cells0\" style=\"font-size:15px; line-height:2;\"></div>\n";
-  page += "</div>\n";
-
-  // Pack 2
-  page += "<div id=\"pack1\" style=\"border:3px solid black; border-radius:10px; padding:10px; margin:8px 0; text-align:left;\">\n";
-  page += "<p class=\"text2\" style=\"margin:0 0 6px;\"><b>Pack 2</b> &nbsp;<span id=\"st1\" style=\"font-size:13px; padding:2px 8px; border-radius:6px; background:#aaa; color:white;\">offline</span></p>\n";
-  page += "<p class=\"text2\" id=\"tot1\">Gesamt: -- V</p>\n";
-  page += "<p class=\"text2\" id=\"soc1\">SoC: -- %</p>\n";
-  page += "<p class=\"text2\" id=\"min1\">Min-Zelle: -- V</p>\n";
-  page += "<div id=\"cells1\" style=\"font-size:15px; line-height:2;\"></div>\n";
-  page += "</div>\n";
-
-  // AJAX: einmaliges Laden + setInterval 3s (XMLHttpRequest, Chrome-kompatibel)
-  page += "<script>\n";
-  page += "function updateSport() {\n";
-  page += "  var xhr = new XMLHttpRequest();\n";
-  page += "  xhr.open('GET', '/sport', true);\n";
-  page += "  xhr.onload = function() {\n";
-  page += "    if (xhr.status !== 200) return;\n";
-  page += "    try { var d = JSON.parse(xhr.responseText); } catch(e) { return; }\n";
-  page += "    for (var i = 0; i < 2; i++) {\n";
-  page += "      var s = d['s'+i];\n";
-  page += "      if (!s) continue;\n";
-  page += "      var stEl = document.getElementById('st'+i);\n";
-  page += "      if (s.online) {\n";
-  page += "        stEl.textContent = 'online'; stEl.style.background = '#4CAF50';\n";
-  page += "        document.getElementById('tot'+i).textContent = 'Gesamt: ' + s.total.toFixed(2) + ' V';\n";
-  page += "        document.getElementById('soc'+i).textContent = 'SoC: ' + s.soc + ' %';\n";
-  page += "        document.getElementById('min'+i).textContent = 'Min-Zelle: ' + s.min.toFixed(3) + ' V';\n";
-  page += "        var ch = '';\n";
-  page += "        for (var c = 0; c < s.cells; c++) {\n";
-  page += "          var v = s.cv[c];\n";
-  page += "          var col = v < 3.5 ? '#ff0000' : v < 3.7 ? '#ff8800' : '#4CAF50';\n";
-  page += "          ch += '<span style=\"display:inline-block; min-width:90px; margin:2px 4px;\">'\n";
-  page += "             + 'Z' + (c+1) + ': <b style=\"color:' + col + '\">' + v.toFixed(3) + ' V</b></span>';\n";
-  page += "        }\n";
-  page += "        document.getElementById('cells'+i).innerHTML = ch;\n";
-  page += "      } else {\n";
-  page += "        stEl.textContent = 'offline'; stEl.style.background = '#aaa';\n";
-  page += "        document.getElementById('tot'+i).textContent = 'Gesamt: -- V';\n";
-  page += "        document.getElementById('soc'+i).textContent = 'SoC: -- %';\n";
-  page += "        document.getElementById('min'+i).textContent = 'Min-Zelle: -- V';\n";
-  page += "        document.getElementById('cells'+i).innerHTML = '<span style=\"color:#888\">kein Signal</span>';\n";
-  page += "      }\n";
-  page += "    }\n";
-  page += "  };\n";
-  page += "  xhr.onerror = function() { console.log('S.Port: Verbindungsfehler'); };\n";
-  page += "  xhr.send();\n";
-  page += "}\n";
-  page += "updateSport();\n";
-  page += "setInterval(updateSport, 3000);\n";
-  page += "</script>\n";
-
-  break;
-  }
   page += "<script> function setsoundon() { \n";
   page += "var sel = document.getElementById(\"SoundON\");\n";
   page += "var opt = sel.options[sel.selectedIndex];\n";
@@ -1162,6 +1164,7 @@ String WebServerManager::buildPage() {
   page += "xhr.open('GET', \"/?ThrottleDeadBand=\" + pos + \"&\", true);\n";
   page += "xhr.send(); } </script>"; page += "\n";
   
+  page += "</body></html>\n";
   page += "</body></html>\n";
   return page;
 }

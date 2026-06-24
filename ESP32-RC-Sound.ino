@@ -1,36 +1,31 @@
 /*
-   ESP32-RC-Sound  v0.84
+   ESP32-RC-Sound  v0.70
    Ziege-One (Der RC-Modellbauer)
 
-   Vereint V1, V2, V3 und V4 in einem Programm.
+   Vereint V1, V2 und V3 in einem Programm.
    Hardware-Version per Web oder TBS Agent wählbar.
 
    HARDWARE_CONFIG:
      V1  GPIO-Pins {22, 0, 2, 4}   – BUS + PWM-Eingang + GPIO-Pin + Einkanal
      V2  GPIO-Pins {14,27,32,33}   – BUS + PWM-Eingang + GPIO-Pin + Einkanal
      V3  kein GPIO-Eingang          – nur BUS-Kanal + Einkanal (SBUS/CRSF)
-     V4  wie V3 + S.Port LiPo-Telemetrie (GPIO 32=RX, GPIO 33=TX)
 
    QUELLEN (V1/V2):
      BUS Kanal Low/High (1-16), PWM-Eingang Low/High (1-6),
      GPIO-Pin direkt (1-6), Einkanal (1-8), Ebene, Dauerbetrieb, Deaktiviert
 
-   QUELLEN (V3/V4):
+   QUELLEN (V3):
      BUS Kanal Low/High (1-16), Einkanal (1-8), Ebene, Dauerbetrieb, Deaktiviert
 
    MOTOR SPEED:
      V1/V2: BUS Kanal + PWM Pin
-     V3/V4: BUS Kanal
+     V3:    BUS Kanal
 
    PIN-BELEGUNG (alle Versionen):
    GPIO 13: WiFi-Aktivierung (LOW = AP-Modus)
    GPIO 16: CRSF RX / SBUS RX  |  GPIO 17: CRSF TX
    GPIO 05: SD_CS  |  GPIO 18: SD_CLK  |  GPIO 19: SD_MISO  |  GPIO 23: SD_MOSI
    GPIO 21: I2S_DOUT  |  GPIO 25: I2S_LRC  |  GPIO 26: I2S_BCLK
-
-   PIN-BELEGUNG V4 (zusätzlich):
-   GPIO 32: S.Port RX               |  GPIO 33: S.Port TX
-   Schaltung: GPIO33 -[1N4148 Anode->Kathode]-> S.Port Signal <- GPIO32
 */
 
 #include <Arduino.h>
@@ -40,9 +35,8 @@
 #include "crsf_esp32.h"
 #include "config.h"
 #include "WebServerManager.h"
-#include "sport_lipo.h"
 
-uint16_t Version = 84;
+uint16_t Version = 70;
 char versionString[6];
 
 // ── Zustand ───────────────────────────────────────────────────────────
@@ -240,8 +234,7 @@ static const char* hwVersionStr() {
     switch(config.Hardware_Config) {
         case 0: return "V1 (GPIO 22,0,2,4)";
         case 1: return "V2 (GPIO 14,27,32,33)";
-        case 2: return "V3 (nur BUS+EK)";
-        default: return "V4 (BUS+EK+S.Port)";
+        default: return "V3 (nur BUS+EK)";
     }
 }
 
@@ -299,7 +292,7 @@ static void crsfSendParam(uint8_t idx) {
             {1,2,16,22,28,34,40,46,52,58,64,74});
     }
     else if(idx==1) {
-        snprintf(buf,sizeof(buf),"v0.84 %s",hwVersionStr());
+        snprintf(buf,sizeof(buf),"v0.70 %s",hwVersionStr());
         crsf.send_param_response_CRSF_INFO(1,0,"Version",buf);
     }
 
@@ -411,8 +404,8 @@ static void crsfSendParam(uint8_t idx) {
         crsf.send_param_response_CRSF_UINT8(70,64,"Ebenen Kanal (255=aus)",v,0,255,"");
     }
     else if(idx==71) crsf.send_param_response_CRSF_TEXT_SELECTION(71,64,
-        "Hardware Config","V1;V2;V3;V4",
-        (uint8_t)constrain(config.Hardware_Config,0,3),0,3);
+        "Hardware Config","V1;V2;V3",
+        (uint8_t)constrain(config.Hardware_Config,0,2),0,2);
     else if(idx==72) crsf.send_param_response_CRSF_UINT8(72,64,"PWM min (/16 us)",
         (uint8_t)(constrain(config.PWM_scale_min,0,4080)/16),0,255,"");
     else if(idx==73) crsf.send_param_response_CRSF_UINT8(73,64,"PWM max (/16 us)",
@@ -459,7 +452,7 @@ static void crsfWriteParam(uint8_t idx, uint8_t val) {
     else if(idx==68){config.Einkanal_mode=(val==0)?0:constrain((int)val+9,10,13);markDirty();}
     else if(idx==69){config.Source_Ebenen_Um_Kanal=(val==255)?999:(int)val;markDirty();}
     else if(idx==70){config.Source_Ebenen_Kanal=(val==255)?999:(int)val;markDirty();}
-    else if(idx==71){config.Hardware_Config=constrain(val,0,3);markDirty();
+    else if(idx==71){config.Hardware_Config=constrain(val,0,2);markDirty();
                      Serial.printf("Hardware Config -> %d (Neustart noetig)\n",config.Hardware_Config);}
     else if(idx==72){config.PWM_scale_min=constrain((int)val*16,0,4080);markDirty();}
     else if(idx==73){config.PWM_scale_max=constrain((int)val*16,0,4080);markDirty();}
@@ -486,7 +479,7 @@ void setup() {
     switch (config.Hardware_Config) {
         case 0: { uint8_t p[]={16,17,22, 0, 2, 4}; memcpy(Input_Pin,p,6); break; }
         case 1: { uint8_t p[]={16,17,14,27,32,33}; memcpy(Input_Pin,p,6); break; }
-        default: break;  // V3/V4: Input_Pin nicht verwendet
+        default: break;  // V3: Input_Pin nicht verwendet
     }
 
     pinMode(WifiPin, INPUT_PULLUP);
@@ -514,12 +507,7 @@ void setup() {
     sprintf(versionString, "%d.%02d", Version/100, Version%100);
     saveConfig();
 
-    // V4: S.Port LiPo-Telemetrie initialisieren
-    if (config.Hardware_Config == 3) {
-        sportLipoInit();
-    }
-
-    Serial.printf("ESP32-RC-Sound v0.84 – Hardware: %s\n", hwVersionStr());
+    Serial.printf("ESP32-RC-Sound v0.70 – Hardware: %s\n", hwVersionStr());
 }
 
 // ======== Loop =======================================================
@@ -532,39 +520,8 @@ void loop() {
         for (int i=0;i<16;i++) channel_output[i]=crsf.get_crfs_channels(i);
         if(channel_output[0]>0){BUS_OK=true;lastCrsfPacket=millis();}
         checkCrsfTimeout();
-        // S.Port Update (V4) und Telemetrie
-        if (config.Hardware_Config == 3) {
-            sportLipoUpdate();
-        }
-
-        static unsigned long lastTelem = 0;
-        if (millis() - lastTelem >= 100) {
-            lastTelem = millis();
-
-            if (config.Hardware_Config == 3) {
-                // ── V4: Telemetrie nur senden wenn mindestens ein Sensor online ──
-                bool anyOnline = lipoSensor[0].online || lipoSensor[1].online;
-                if (anyOnline) {
-                    // Gesamtspannung + SoC aus niedrigster Einzelzelle
-                    float   totalV   = sportGetTotalVoltage();
-                    float   minCell  = sportGetMinCell();
-                    uint8_t soc      = sportCalcSoC(minCell);
-                    uint16_t voltCrsf = (uint16_t)(totalV * 10.0f + 0.5f);
-                    crsf.send_tele_Battery_Sensor(voltCrsf, 0, 0, soc);
-
-                    // Einzelzellen Pack 1
-                    if (lipoSensor[0].online) sportSendCellsTelemetry(0);
-                    // Einzelzellen Pack 2
-                    if (lipoSensor[1].online) sportSendCellsTelemetry(1);
-                }
-                // Kein Sensor online → keine Telemetrie senden
-            } else {
-                // V1/V2/V3: wie bisher, kein LiPo-Sensor
-                // Keine Telemetrie senden (war vorher Dummy 0,0,0,100)
-                // Nur senden wenn CRSF aktiv, als Keep-Alive
-                crsf.send_tele_Battery_Sensor(0, 0, 0, 0);
-            }
-        }
+        static unsigned long lastTelem=0;
+        if(millis()-lastTelem>=100){lastTelem=millis();crsf.send_tele_Battery_Sensor(0,0,0,100);}
         if(crsf.getDeviceInfoReplyPending()){
             crsf.setDeviceInfoReplyPending(false);
             char dn[24]; snprintf(dn,sizeof(dn),"%s@%d",config.Device_Name,config.modul_adress);
@@ -637,7 +594,7 @@ void handleSound(uint8_t idx, XT_Wav_Class* snd) {
 
 // ======== Config: Quellen auswerten ==================================
 void Config() {
-    bool isV3 = (config.Hardware_Config >= 2);  // V3 und V4 haben keine GPIO-Eingänge
+    bool isV3 = (config.Hardware_Config >= 2);
 
     for (int x=0; x<=8; x++) {
         int src = config.Source_Start_Sound[x];
