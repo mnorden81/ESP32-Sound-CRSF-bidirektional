@@ -1,6 +1,7 @@
 # ESP32-RC-Sound v0.70
 
-**Autor:** Ziege-One (Der RC-Modellbauer)
+**Autor:** PiperPilot
+Basiert auf Ziege-One (Der RC-Modellbauer)
 
 ESP32-basiertes RC-Soundmodul mit I2S-Audioausgabe, SD-Karten-Wiedergabe und Konfiguration über WLAN-Weboberfläche oder TBS Agent (CRSF-Parameterystem).
 
