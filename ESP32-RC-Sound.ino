@@ -1,6 +1,7 @@
 /*
    ESP32-RC-Sound  v0.70
-   Ziege-One (Der RC-Modellbauer)
+   Autor: PiperPilot
+   Basiert auf Ziege-One (Der RC-Modellbauer)Ziege-One (Der RC-Modellbauer)
 
    Vereint V1, V2 und V3 in einem Programm.
    Hardware-Version per Web oder TBS Agent wählbar.
